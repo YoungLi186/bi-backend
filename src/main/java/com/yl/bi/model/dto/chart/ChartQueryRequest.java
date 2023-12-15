@@ -21,6 +21,10 @@ public class ChartQueryRequest extends PageRequest implements Serializable {
     private String goal;
 
     /**
+     * 图表名称
+     */
+    private String name;
+    /**
      * 图表类型
      */
     private String chartType;
