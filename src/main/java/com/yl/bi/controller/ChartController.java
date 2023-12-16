@@ -13,15 +13,18 @@ import com.yl.bi.constant.FileConstant;
 import com.yl.bi.constant.UserConstant;
 import com.yl.bi.exception.BusinessException;
 import com.yl.bi.exception.ThrowUtils;
+import com.yl.bi.manager.AIManager;
 import com.yl.bi.model.dto.chart.*;
 import com.yl.bi.model.dto.file.UploadFileRequest;
 import com.yl.bi.model.entity.Chart;
 import com.yl.bi.model.entity.User;
 import com.yl.bi.model.enums.FileUploadBizEnum;
+import com.yl.bi.model.vo.BiVO;
 import com.yl.bi.service.ChartService;
 import com.yl.bi.service.UserService;
 import com.yl.bi.utils.ExcelUtils;
 import com.yl.bi.utils.SqlUtils;
+import io.github.briqt.spark4j.SparkClient;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -47,6 +50,7 @@ public class ChartController {
 
     @Resource
     private UserService userService;
+
 
     private final static Gson GSON = new Gson();
 
@@ -250,49 +254,17 @@ public class ChartController {
      * @return
      */
     @PostMapping("/gen")
-    public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+    public BaseResponse<BiVO> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
-        String chartType = genChartByAiRequest.getChartType();
-
-
         //分析目标为空
-        ThrowUtils.throwIf(StringUtils.isBlank(goal),ErrorCode.PARAMS_ERROR,"目标为空");
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
         //图标名称过长不符合规范
-        ThrowUtils.throwIf(StringUtils.isNotBlank(name)&&name.length()>100,ErrorCode.PARAMS_ERROR,"图标名称过长");
-
-        StringBuilder userInput = new StringBuilder();
-        userInput.append("你是一个数据分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论。").append("\n");
-        userInput.append("分析目标：").append(goal).append("\n");
-        // 压缩后的数据（把multipartFile传进来，其他的东西先注释）
-        String result = ExcelUtils.excelToCsv(multipartFile);
-        userInput.append("数据：").append(result).append("\n");
-        return ResultUtils.success(userInput.toString());
-
-//        User loginUser = userService.getLoginUser(request);
-//        // 文件目录：根据业务、用户来划分
-//        String uuid = RandomStringUtils.randomAlphanumeric(8);
-//        String filename = uuid + "-" + multipartFile.getOriginalFilename();
-//        File file = null;
-//        try {
-//            // 返回可访问地址
-//            return ResultUtils.success("");
-//        } catch (Exception e) {
-//            log.error("file upload error");
-//            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
-//        } finally {
-//            if (file != null) {
-//                // 删除临时文件
-//                boolean delete = file.delete();
-//                if (!delete) {
-//                    log.error("file delete error");
-//                }
-//            }
-//        }
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
+        User loginUser = userService.getLoginUser(request);
+        BiVO chart = chartService.getChart(multipartFile, genChartByAiRequest, loginUser);
+        return ResultUtils.success(chart);
     }
-
-
-
 }

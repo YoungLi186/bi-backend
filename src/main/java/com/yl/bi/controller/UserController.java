@@ -6,7 +6,7 @@ import com.yl.bi.common.BaseResponse;
 import com.yl.bi.common.DeleteRequest;
 import com.yl.bi.common.ErrorCode;
 import com.yl.bi.common.ResultUtils;
-import com.yl.bi.config.WxOpenConfig;
+
 import com.yl.bi.constant.UserConstant;
 import com.yl.bi.exception.BusinessException;
 import com.yl.bi.exception.ThrowUtils;
@@ -42,10 +42,6 @@ public class UserController {
 
     @Resource
     private UserService userService;
-
-    @Resource
-    private WxOpenConfig wxOpenConfig;
-
     // region 登录相关
 
     /**
@@ -213,7 +209,6 @@ public class UserController {
 
     /**
      * 分页获取用户列表（仅管理员）
-     *
      * @param userQueryRequest
      * @param request
      * @return
@@ -231,7 +226,6 @@ public class UserController {
 
     /**
      * 分页获取用户封装列表
-     *
      * @param userQueryRequest
      * @param request
      * @return
@@ -277,4 +271,7 @@ public class UserController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
     }
+
+
+
 }
