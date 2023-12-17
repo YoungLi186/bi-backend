@@ -3,6 +3,7 @@ package com.yl.bi.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
+import com.sun.org.apache.regexp.internal.RE;
 import com.yl.bi.annotation.AuthCheck;
 import com.yl.bi.common.BaseResponse;
 import com.yl.bi.common.DeleteRequest;
@@ -14,6 +15,7 @@ import com.yl.bi.constant.UserConstant;
 import com.yl.bi.exception.BusinessException;
 import com.yl.bi.exception.ThrowUtils;
 import com.yl.bi.manager.AIManager;
+import com.yl.bi.manager.RedisLimiterManager;
 import com.yl.bi.model.dto.chart.*;
 import com.yl.bi.model.dto.file.UploadFileRequest;
 import com.yl.bi.model.entity.Chart;
@@ -50,6 +52,9 @@ public class ChartController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private RedisLimiterManager redisLimiterManager;
 
 
     private final static Gson GSON = new Gson();
@@ -264,6 +269,7 @@ public class ChartController {
         //图标名称过长不符合规范
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
         User loginUser = userService.getLoginUser(request);
+        redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
         BiVO chart = chartService.getChart(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
     }

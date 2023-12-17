@@ -1,5 +1,6 @@
 package com.yl.bi.service.impl;
 
+import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yl.bi.common.ErrorCode;
 import com.yl.bi.exception.ThrowUtils;
@@ -18,12 +19,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  *
  */
 @Service
-public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements ChartService{
+public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements ChartService {
 
 
     @Resource
@@ -33,7 +36,6 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
     public BiVO getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
         // 分析 xlsx 文件
         String cvsData = ExcelUtils.excelToCsv(multipartFile);
-
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
         String chartType = genChartByAiRequest.getChartType();

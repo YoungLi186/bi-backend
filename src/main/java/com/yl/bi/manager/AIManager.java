@@ -61,5 +61,4 @@ public class AIManager {
         return chatResponse.getContent();
     }
 
-
 }
