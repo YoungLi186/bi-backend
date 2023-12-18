@@ -34,6 +34,18 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
 
     @Override
     public BiVO getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
+
+        //拿到文件的大小和原始文件名
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+
+        //检验文件大小
+        ThrowUtils.throwIf(size>FIVE_MB,ErrorCode.PARAMS_ERROR,"文件超过 5MB");
+
+        //检验文件后缀
+        String suffix = FileUtil.getSuffix(originalFilename);
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix),ErrorCode.PARAMS_ERROR,"文件不合法");
+
         // 分析 xlsx 文件
         String cvsData = ExcelUtils.excelToCsv(multipartFile);
         String goal = genChartByAiRequest.getGoal();
