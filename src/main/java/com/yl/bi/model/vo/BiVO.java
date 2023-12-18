@@ -2,12 +2,14 @@ package com.yl.bi.model.vo;
 
 import com.yl.bi.common.ErrorCode;
 import com.yl.bi.exception.ThrowUtils;
+import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 
 @Getter
 @NoArgsConstructor
+@Data
 public class BiVO {
     private Long chartId;
 

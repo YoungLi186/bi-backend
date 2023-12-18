@@ -16,9 +16,26 @@ import java.util.List;
  */
 public interface ChartService extends IService<Chart> {
 
-     long  FIVE_MB  = 5 * 1024 * 1024L;
+     long  ONE_MB  = 1024 * 1024L;
 
      List<String> validFileSuffixList  = Arrays.asList("xlsx","xls");
+
+    /**
+     *以同步的方式生成图表
+     * @param multipartFile 上传的文件
+     * @param genChartByAiRequest 生成图表请求
+     * @param loginUser 当前登录用户
+     * @return
+     */
     BiVO getChart(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
+
+    /**
+     *异步的方式生成图表
+     * @param multipartFile 上传的文件
+     * @param genChartByAiRequest 生成图表请求
+     * @param loginUser 当前登录用户
+     * @return
+     */
+    BiVO getChartByAsync(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
 
 }

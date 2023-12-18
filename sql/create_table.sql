@@ -22,18 +22,21 @@ create table if not exists user
     ) comment '用户' collate = utf8mb4_unicode_ci;
 
 -- 图表表
-CREATE TABLE `chart`
+create table chart
 (
- `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
- `name` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图表名称',
- `chartData` text COLLATE utf8mb4_unicode_ci COMMENT '图表数据',
- `goal` text COLLATE utf8mb4_unicode_ci COMMENT '分析目标',
- `genChart` text COLLATE utf8mb4_unicode_ci COMMENT '生成的图表数据',
- `genResult` text COLLATE utf8mb4_unicode_ci COMMENT '生成的分析结论',
- `chartType` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图表类型',
- `createTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
- `updateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
- `isDelete` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除',
- `userId` bigint(20) DEFAULT NULL COMMENT '创建用户 id',
- PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='图表信息表'
+    id         bigint auto_increment comment 'id'
+        primary key,
+    name       varchar(128)                           null comment '图标名称',
+    chartData  text                                   null comment '图表数据',
+    goal       text                                   null comment '分析目标',
+    genChart   text                                   null comment '生成的图表数据',
+    genResult  text                                   null comment '生成的分析结论',
+    status     varchar(128) default 'wait'            not null comment 'wait,running，succeed，failed ',
+    message    text                                   null comment '执行信息',
+    updateTime datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete   tinyint      default 0                 not null comment '是否删除',
+    userId     bigint                                 null comment '创建用户 id',
+    chartType  varchar(128)                           null comment '图表类型',
+    createTime datetime     default CURRENT_TIMESTAMP not null comment '创建时间'
+)
+    comment '图表信息表' collate = utf8mb4_unicode_ci;
