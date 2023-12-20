@@ -276,7 +276,7 @@ public class ChartController {
 
 
     /**
-     * 调用AI分析数据生成图表(同步)
+     * 调用AI分析数据生成图表(异步)
      * @param multipartFile
      * @param genChartByAiRequest
      * @param request
@@ -295,6 +295,30 @@ public class ChartController {
         User loginUser = userService.getLoginUser(request);
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
         BiVO chart = chartService.getChartByAsync(multipartFile, genChartByAiRequest, loginUser);
+        return ResultUtils.success(chart);
+    }
+
+
+    /**
+     * 调用AI分析数据生成图表(消息队列版)
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/mq")
+    public BaseResponse<BiVO> genChartByAiMq(@RequestPart("file") MultipartFile multipartFile,
+                                                GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+
+        String goal = genChartByAiRequest.getGoal();
+        String name = genChartByAiRequest.getName();
+        //分析目标为空
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        //图标名称过长不符合规范
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
+        User loginUser = userService.getLoginUser(request);
+        redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
+        BiVO chart = chartService.getChartByMq(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
     }
 }

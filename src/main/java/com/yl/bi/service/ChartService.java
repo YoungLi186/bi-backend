@@ -38,4 +38,14 @@ public interface ChartService extends IService<Chart> {
      */
     BiVO getChartByAsync(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
 
+
+    /**
+     *基于消息队列实现异步生成图表
+     * @param multipartFile 上传的文件
+     * @param genChartByAiRequest 生成图表请求
+     * @param loginUser 当前登录用户
+     * @return
+     */
+    BiVO getChartByMq(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
+
 }

@@ -2,6 +2,7 @@ package com.yl.bi.service.impl;
 
 import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yl.bi.bizmq.MqProducerService;
 import com.yl.bi.common.ErrorCode;
 import com.yl.bi.exception.ThrowUtils;
 import com.yl.bi.manager.AIManager;
@@ -14,12 +15,14 @@ import com.yl.bi.service.ChartService;
 import com.yl.bi.mapper.ChartMapper;
 import com.yl.bi.utils.ChartDataUtil;
 import com.yl.bi.utils.ExcelUtils;
+import org.apache.rocketmq.client.producer.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -36,6 +39,9 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
 
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
+
+    @Resource
+    private MqProducerService mqProducerService;
 
     @Override
     public BiVO getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
@@ -80,6 +86,64 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
     @Override
     public BiVO getChartByAsync(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
 
+        Chart chart = saveChart(multipartFile, genChartByAiRequest, loginUser);
+        String goal = chart.getGoal();
+        String chartType = chart.getChartType();
+        String cvsData = chart.getChartData();
+        // todo 建议处理任务队列满了后,抛异常的情况(因为提交任务报错了,前端会返回异常)
+        CompletableFuture.runAsync(()->{
+            //更新图标生成状态为running
+            Chart updateChart = new Chart();
+            updateChart.setId(chart.getId());
+            updateChart.setStatus("running");
+            boolean b = updateById(updateChart);
+            if(!b){
+                handleChartUpdateError(chart.getId(), "更新图标状态失败");
+            }
+            // 发送给 AI 分析数据
+            ChartGenResult chartGenResult = ChartDataUtil.getGenResult(aiManager, goal, cvsData, chartType);
+            String genChart = chartGenResult.getGenChart();
+            String genResult = chartGenResult.getGenResult();
+            updateChart.setGenChart(genChart);
+            updateChart.setGenResult(genResult);
+            updateChart.setStatus("succeed");
+             b = updateById(updateChart);
+            if(!b){
+                handleChartUpdateError(chart.getId(), "更新图标状态失败");
+            }
+        },threadPoolExecutor);
+
+        BiVO biVO = new BiVO();
+        biVO.setChartId(chart.getId());
+        return biVO;
+    }
+
+    @Override
+    public BiVO getChartByMq(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
+        Chart chart = saveChart(multipartFile, genChartByAiRequest, loginUser);
+        Long id = chart.getId();
+        //将待生成的图表ID放入消息队列中
+        mqProducerService.sendMsg(id.toString());
+        BiVO biVO = new BiVO();
+        biVO.setChartId(chart.getId());
+        return biVO;
+    }
+
+
+    public void handleChartUpdateError(Long chardId,String message){
+        Chart updateChart = new Chart();
+        updateChart.setId(chardId);
+        updateChart.setMessage(message);
+        updateChart.setStatus("failed");
+        boolean b = updateById(updateChart);
+        if(!b){
+            log.error("更新图表状态失败，charId:"+chardId+","+message);
+        }
+    }
+
+
+    public Chart saveChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser){
+
         //拿到文件的大小和原始文件名
         long size = multipartFile.getSize();
         String originalFilename = multipartFile.getOriginalFilename();
@@ -107,48 +171,9 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         chart.setStatus("wait");
         boolean saveResult = this.save(chart);
         ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "保存图表信息失败");
-
-
-        // todo 建议处理任务队列满了后,抛异常的情况(因为提交任务报错了,前端会返回异常)
-        CompletableFuture.runAsync(()->{
-            //更新图标生成状态为running
-            Chart updateChart = new Chart();
-            updateChart.setId(chart.getId());
-            updateChart.setStatus("running");
-            boolean b = updateById(updateChart);
-            if(!b){
-                handleChartUpdateError(chart.getId(), "更新图标状态失败");
-            }
-            // 发送给 AI 分析数据
-            ChartGenResult chartGenResult = ChartDataUtil.getGenResult(aiManager, goal, cvsData, chartType);
-            String genChart = chartGenResult.getGenChart();
-            String genResult = chartGenResult.getGenResult();
-            updateChart.setGenChart(genChart);
-            updateChart.setGenResult(genResult);
-            updateChart.setStatus("succeed");
-             b = updateById(updateChart);
-            if(!b){
-                handleChartUpdateError(chart.getId(), "更新图标状态失败");
-            }
-        },threadPoolExecutor);
-
-
-        BiVO biVO = new BiVO();
-        biVO.setChartId(chart.getId());
-        return biVO;
+        return chart;
     }
 
-
-    public void handleChartUpdateError(Long chardId,String message){
-        Chart updateChart = new Chart();
-        updateChart.setId(chardId);
-        updateChart.setMessage(message);
-        updateChart.setStatus("failed");
-        boolean b = updateById(updateChart);
-        if(!b){
-            log.error("更新图表状态失败，charId:"+chardId+","+message);
-        }
-    }
 
 }
 
