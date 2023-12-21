@@ -14,6 +14,8 @@ import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -38,12 +40,18 @@ public class MqConsumerService implements RocketMQListener<String> {
         }
         Chart chart = chartService.getById(chartId);
         if(chart ==null){
-            handleChartUpdateError(chartId, "图表不存在");
+            handleChartUpdateError(chartId, "图表信息不存在");
             return;
         }
-        String chartData = chart.getChartData();
+
+
         String goal = chart.getGoal();
         String chartType = chart.getChartType();
+        List<Map<String, Object>> chartOriginData= chartService.queryChartData(chartId);
+        String chartData = ChartDataUtil.changeDataToCSV(chartOriginData);
+        if(StrUtil.isBlank(chartData)){
+            handleChartUpdateError(chartId,"源数据为空");
+        }
 
         //更新图标生成状态为running
         Chart updateChart = new Chart();

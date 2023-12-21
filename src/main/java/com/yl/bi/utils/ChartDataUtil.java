@@ -14,11 +14,19 @@ import java.util.Set;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
+
 @Component
 @Slf4j
 public class ChartDataUtil {
 
+
+    /**
+     * 将从数据库读出的图表信息转化为文本
+     * @param chartOriginalData
+     * @return
+     */
     public static String changeDataToCSV(List<Map<String, Object>> chartOriginalData) {
+        if(chartOriginalData==null) return null;
         List<Set<String>> columnSets = chartOriginalData.stream()
                 .map(Map::keySet)
                 .collect(Collectors.toList());
@@ -60,7 +68,7 @@ public class ChartDataUtil {
         log.info("AI 生成的信息: {}", resultData);
 
         String[] split = resultData.split("%%%%%%");
-        ThrowUtils.throwIf(split.length!=3, ErrorCode.SYSTEM_ERROR);
+        ThrowUtils.throwIf(split.length!=3, ErrorCode.SYSTEM_ERROR,"AI生成错误");
         String genChart = resultData.split("%%%%%%")[1].trim();
         String genResult = resultData.split("%%%%%%")[2].trim();
         return new ChartGenResult(genChart, genResult);

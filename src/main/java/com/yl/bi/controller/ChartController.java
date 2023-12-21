@@ -222,7 +222,6 @@ public class ChartController {
 
     /**
      * 获取查询包装类
-     *
      * @param chartQueryRequest
      * @return
      */
@@ -320,5 +319,8 @@ public class ChartController {
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
         BiVO chart = chartService.getChartByMq(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
+
+
+
     }
 }

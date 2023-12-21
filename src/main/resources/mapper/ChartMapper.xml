@@ -25,4 +25,20 @@
         chartType,genChart,genResult,`status`,message,userId,
         createTime,updateTime,isDelete
     </sql>
+
+    <!--全部自定义 SQL-->
+    <update id="createTable">
+        ${creatTableSQL}
+    </update>
+    <!--插入 value-->
+    <insert id="insertValue">
+        ${insertCVSData}
+    </insert>
+    <!--查询语句-->
+    <select id="queryChartData" resultType="java.util.Map">
+        select * from charts_${tableName}
+    </select>
+
+
+
 </mapper>

@@ -1,12 +1,16 @@
 package com.yl.bi.service.impl;
 
 import cn.hutool.core.io.FileUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yl.bi.bizmq.MqProducerService;
 import com.yl.bi.common.ErrorCode;
+import com.yl.bi.exception.BusinessException;
 import com.yl.bi.exception.ThrowUtils;
 import com.yl.bi.manager.AIManager;
 import com.yl.bi.model.dto.chart.ChartGenResult;
+import com.yl.bi.model.dto.chart.ChartQueryRequest;
 import com.yl.bi.model.dto.chart.GenChartByAiRequest;
 import com.yl.bi.model.entity.Chart;
 import com.yl.bi.model.entity.User;
@@ -15,15 +19,19 @@ import com.yl.bi.service.ChartService;
 import com.yl.bi.mapper.ChartMapper;
 import com.yl.bi.utils.ChartDataUtil;
 import com.yl.bi.utils.ExcelUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.client.producer.SendResult;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.sql.Connection;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -43,6 +51,13 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
     @Resource
     private MqProducerService mqProducerService;
 
+    @Resource
+    private ChartMapper chartMapper;
+
+
+//    @Resource
+//    private Connection connection;
+
     @Override
     public BiVO getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
 
@@ -51,17 +66,18 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         String originalFilename = multipartFile.getOriginalFilename();
 
         //检验文件大小
-        ThrowUtils.throwIf(size>ONE_MB,ErrorCode.PARAMS_ERROR,"文件超过 1MB");
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过 1MB");
 
         //检验文件后缀
         String suffix = FileUtil.getSuffix(originalFilename);
-        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix),ErrorCode.PARAMS_ERROR,"文件不合法");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件不合法");
 
         // 分析 xlsx 文件
         String cvsData = ExcelUtils.excelToCsv(multipartFile);
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
         String chartType = genChartByAiRequest.getChartType();
+
 
         // 发送给 AI 分析数据
         ChartGenResult chartGenResult = ChartDataUtil.getGenResult(aiManager, goal, cvsData, chartType);
@@ -71,15 +87,18 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         Chart chart = new Chart();
         chart.setGoal(goal);
         chart.setName(name);
-        chart.setChartData(cvsData);
+        // chart.setChartData(cvsData);
         chart.setChartType(chartType);
         chart.setGenChart(genChart);
         chart.setGenResult(genResult);
         chart.setUserId(loginUser.getId());
+        chart.setStatus("succeed");
         boolean saveResult = this.save(chart);
         Long charId = chart.getId();
 
         ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "保存图表信息失败");
+        //将图表元数据保存到单独的一张表
+        saveCVSData(cvsData, charId);
         return new BiVO(charId, genChart, genResult);
     }
 
@@ -91,13 +110,13 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         String chartType = chart.getChartType();
         String cvsData = chart.getChartData();
         // todo 建议处理任务队列满了后,抛异常的情况(因为提交任务报错了,前端会返回异常)
-        CompletableFuture.runAsync(()->{
+        CompletableFuture.runAsync(() -> {
             //更新图标生成状态为running
             Chart updateChart = new Chart();
             updateChart.setId(chart.getId());
             updateChart.setStatus("running");
             boolean b = updateById(updateChart);
-            if(!b){
+            if (!b) {
                 handleChartUpdateError(chart.getId(), "更新图标状态失败");
             }
             // 发送给 AI 分析数据
@@ -107,11 +126,11 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
             updateChart.setGenChart(genChart);
             updateChart.setGenResult(genResult);
             updateChart.setStatus("succeed");
-             b = updateById(updateChart);
-            if(!b){
+            b = updateById(updateChart);
+            if (!b) {
                 handleChartUpdateError(chart.getId(), "更新图标状态失败");
             }
-        },threadPoolExecutor);
+        }, threadPoolExecutor);
 
         BiVO biVO = new BiVO();
         biVO.setChartId(chart.getId());
@@ -124,35 +143,82 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         Long id = chart.getId();
         //将待生成的图表ID放入消息队列中
         mqProducerService.sendMsg(id.toString());
-        BiVO biVO = new BiVO();
-        biVO.setChartId(chart.getId());
-        return biVO;
+        return new BiVO(id);
     }
 
 
-    public void handleChartUpdateError(Long chardId,String message){
+    /**
+     * 分页获取用户图表
+     *
+     * @param chartQueryRequest 图表查询请求
+     * @return
+     */
+    @Override
+    public Page<Chart> getMyChartList(ChartQueryRequest chartQueryRequest) {
+        ThrowUtils.throwIf(chartQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        QueryWrapper<Chart> queryWrapper = new QueryWrapper<>();
+        final String chartName = chartQueryRequest.getName();
+        queryWrapper.like(StringUtils.isNotBlank(chartName), "chartName", chartName);
+        final String goal = chartQueryRequest.getGoal();
+        queryWrapper.eq(StringUtils.isNotBlank(goal), "goal", goal);
+        final String chartType = chartQueryRequest.getChartType();
+        queryWrapper.like(StringUtils.isNotBlank(chartType), "chartType", "%" + chartType + "%");
+        final Long userId = chartQueryRequest.getUserId();
+        queryWrapper.eq(userId != null && userId > 0, "userId", userId);
+//        final Date createTime = chartQueryRequest.getCreateTime();
+//        final Date updateTime = chartQueryRequest.getUpdateTime();
+//        queryWrapper.le(createTime != null, "creatTime", createTime);
+//        queryWrapper.le(updateTime != null, "creatTime", createTime);
+        Page<Chart> pageData = this.page(new Page<>(chartQueryRequest.getCurrent(), chartQueryRequest.getPageSize()), queryWrapper);
+        ThrowUtils.throwIf(pageData == null, ErrorCode.SYSTEM_ERROR);
+        //从每个具体的表中查询
+        pageData.getRecords().forEach(chart -> {
+            Long id = chart.getId();
+            List<Map<String, Object>> chartOriginData = queryChartData(id);
+            String dataToCSV = ChartDataUtil.changeDataToCSV(chartOriginData);
+            chart.setChartData(dataToCSV);
+        });
+        return pageData;
+    }
+
+
+    /**
+     * 处理图表更新错误
+     *
+     * @param chardId 图表id
+     * @param message 错误信息
+     */
+    public void handleChartUpdateError(Long chardId, String message) {
         Chart updateChart = new Chart();
         updateChart.setId(chardId);
         updateChart.setMessage(message);
         updateChart.setStatus("failed");
         boolean b = updateById(updateChart);
-        if(!b){
-            log.error("更新图表状态失败，charId:"+chardId+","+message);
+        if (!b) {
+            log.error("更新图表状态失败，charId:" + chardId + "," + message);
         }
     }
 
 
-    public Chart saveChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser){
+    /**
+     * 将图表基本信息保存到数据库
+     *
+     * @param multipartFile       数据文件
+     * @param genChartByAiRequest 生成图表请求
+     * @param loginUser           当前登录用户
+     * @return
+     */
+    public Chart saveChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
 
         //拿到文件的大小和原始文件名
         long size = multipartFile.getSize();
         String originalFilename = multipartFile.getOriginalFilename();
         //检验文件大小
-        ThrowUtils.throwIf(size>ONE_MB,ErrorCode.PARAMS_ERROR,"文件超过 1MB");
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过 1MB");
 
         //检验文件后缀
         String suffix = FileUtil.getSuffix(originalFilename);
-        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix),ErrorCode.PARAMS_ERROR,"文件不合法");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件不合法");
 
         // 分析 xlsx 文件
         String cvsData = ExcelUtils.excelToCsv(multipartFile);
@@ -160,18 +226,78 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         String name = genChartByAiRequest.getName();
         String chartType = genChartByAiRequest.getChartType();
 
-
         //将现有的信息记录到数据库中
         Chart chart = new Chart();
         chart.setGoal(goal);
         chart.setName(name);
-        chart.setChartData(cvsData);
         chart.setChartType(chartType);
         chart.setUserId(loginUser.getId());
         chart.setStatus("wait");
         boolean saveResult = this.save(chart);
         ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "保存图表信息失败");
+        //将图表元数据保存到单独的一张表
+        saveCVSData(cvsData, chart.getId());
+        chart.setChartData(cvsData);//因为后续要继续使用源数据所以这里赋值，但数据表中并没有存入源数据
         return chart;
+    }
+
+
+    /**
+     * 将每个图表原始数据单独放入一个表中
+     * 生成建表格 SQL 并且插入 cvs 数据到表中
+     *
+     * @param cvsData
+     * @param chartId
+     */
+    private void saveCVSData(final String cvsData, final Long chartId) {
+        String[] columnHeaders = cvsData.split("\n")[0].split(",");
+        StringBuilder sqlColumns = new StringBuilder();
+        for (int i = 0; i < columnHeaders.length; i++) {
+            ThrowUtils.throwIf(StringUtils.isAnyBlank(columnHeaders[i]), ErrorCode.PARAMS_ERROR);
+            sqlColumns.append("`").append(columnHeaders[i]).append("`").append(" varchar(50) NOT NULL");
+            if (i != columnHeaders.length - 1) {
+                sqlColumns.append(", ");
+            }
+        }
+        String sql = String.format("CREATE TABLE charts_%d ( %s )", chartId, sqlColumns);
+        String[] columns = cvsData.split("\n");
+        StringBuilder insertSql = new StringBuilder();
+        insertSql.append("INSERT INTO charts_").append(chartId).append(" VALUES ");
+        for (int i = 1; i < columns.length; i++) {
+            String[] strings = columns[i].split(",");
+            insertSql.append("(");
+            for (int j = 0; j < strings.length; j++) {
+                insertSql.append("'").append(strings[j]).append("'");
+                if (j != strings.length - 1) {
+                    insertSql.append(", ");
+                }
+            }
+            insertSql.append(")");
+            if (i != columns.length - 1) {
+                insertSql.append(", ");
+            }
+        }
+        try {
+            chartMapper.createTable(sql);
+            chartMapper.insertValue(insertSql.toString());
+        } catch (Exception e) {
+            log.error("插入数据报错 " + e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    /**
+     * 查询保存到数据库之中的 cvs 数据
+     *
+     * @param chartId 图表编号
+     * @return
+     */
+    public List<Map<String, Object>> queryChartData(final Long chartId) throws BadSqlGrammarException {
+        try {
+            return chartMapper.queryChartData(chartId);
+        } catch (BadSqlGrammarException e) {
+            return null;
+        }
     }
 
 

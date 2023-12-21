@@ -24,7 +24,13 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class ExcelUtils {
-        public static String excelToCsv(MultipartFile multipartFile) {
+
+    /**
+     * 将用户上传的Excel文件转换为CSV格式
+     * @param multipartFile
+     * @return
+     */
+    public static String excelToCsv(MultipartFile multipartFile) {
             // 读取数据
             List<Map<Integer, String>> list = null;
             try {
