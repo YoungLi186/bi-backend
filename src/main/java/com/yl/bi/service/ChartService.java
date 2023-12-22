@@ -6,11 +6,11 @@ import com.yl.bi.model.dto.chart.GenChartByAiRequest;
 import com.yl.bi.model.entity.Chart;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.yl.bi.model.entity.User;
-import com.yl.bi.model.vo.BiVO;
+import com.yl.bi.common.BiResponse;
+import com.yl.bi.model.vo.ChartVO;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +31,7 @@ public interface ChartService extends IService<Chart> {
      * @param loginUser 当前登录用户
      * @return
      */
-    BiVO  getChart(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
+    BiResponse getChart(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
 
     /**
      *异步的方式生成图表
@@ -40,7 +40,7 @@ public interface ChartService extends IService<Chart> {
      * @param loginUser 当前登录用户
      * @return
      */
-    BiVO getChartByAsync(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
+    BiResponse getChartByAsync(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
 
 
     /**
@@ -50,7 +50,7 @@ public interface ChartService extends IService<Chart> {
      * @param loginUser 当前登录用户
      * @return
      */
-    BiVO getChartByMq(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
+    BiResponse getChartByMq(final MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser);
 
 
 
@@ -65,6 +65,21 @@ public interface ChartService extends IService<Chart> {
      * @param chartId 图表编号
      * @return
      */
-     List<Map<String, Object>> queryChartData(final Long chartId) throws BadSqlGrammarException;
+     List<Map<String, Object>> queryChartData(final Long chartId) ;
 
+
+    /**
+     * 获取图表的封装类
+     * @param chart
+     * @return
+     */
+    ChartVO getChartVO(Chart chart);
+
+
+    /**
+     * 获取Chart信息
+     * @param id
+     * @return
+     */
+    Chart getChartById(Long id);
 }

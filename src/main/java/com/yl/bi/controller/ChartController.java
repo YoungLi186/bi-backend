@@ -3,33 +3,26 @@ package com.yl.bi.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
-import com.sun.org.apache.regexp.internal.RE;
 import com.yl.bi.annotation.AuthCheck;
 import com.yl.bi.common.BaseResponse;
 import com.yl.bi.common.DeleteRequest;
 import com.yl.bi.common.ErrorCode;
 import com.yl.bi.common.ResultUtils;
 import com.yl.bi.constant.CommonConstant;
-import com.yl.bi.constant.FileConstant;
 import com.yl.bi.constant.UserConstant;
 import com.yl.bi.exception.BusinessException;
 import com.yl.bi.exception.ThrowUtils;
-import com.yl.bi.manager.AIManager;
 import com.yl.bi.manager.RedisLimiterManager;
 import com.yl.bi.model.dto.chart.*;
-import com.yl.bi.model.dto.file.UploadFileRequest;
 import com.yl.bi.model.entity.Chart;
 import com.yl.bi.model.entity.User;
-import com.yl.bi.model.enums.FileUploadBizEnum;
-import com.yl.bi.model.vo.BiVO;
+import com.yl.bi.common.BiResponse;
+import com.yl.bi.model.vo.ChartVO;
 import com.yl.bi.service.ChartService;
 import com.yl.bi.service.UserService;
-import com.yl.bi.utils.ExcelUtils;
 import com.yl.bi.utils.SqlUtils;
-import io.github.briqt.spark4j.SparkClient;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +30,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.io.File;
 
 /**
  * 图表接口
@@ -141,11 +133,31 @@ public class ChartController {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Chart chart = chartService.getById(id);
+        Chart chart = chartService.getChartById(id);
         if (chart == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
         return ResultUtils.success(chart);
+    }
+
+
+    /**
+     * 根据 id 获取
+     *
+     * @param id
+     * @return
+     */
+    @GetMapping("/get/vo")
+    public BaseResponse<ChartVO> getChartVOById(long id, HttpServletRequest request) {
+        if (id <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Chart chart = chartService.getChartById(id);
+        ChartVO chartVO = chartService.getChartVO(chart);
+        if (chartVO == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        return ResultUtils.success(chartVO);
     }
 
     /**
@@ -258,8 +270,8 @@ public class ChartController {
      * @return
      */
     @PostMapping("/gen")
-    public BaseResponse<BiVO> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
-                                             GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+    public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+                                                 GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
@@ -269,7 +281,7 @@ public class ChartController {
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
         User loginUser = userService.getLoginUser(request);
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
-        BiVO chart = chartService.getChart(multipartFile, genChartByAiRequest, loginUser);
+        BiResponse chart = chartService.getChart(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
     }
 
@@ -282,8 +294,8 @@ public class ChartController {
      * @return
      */
     @PostMapping("/gen/async")
-    public BaseResponse<BiVO> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
-                                           GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+    public BaseResponse<BiResponse> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
+                                                      GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
@@ -293,7 +305,7 @@ public class ChartController {
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
         User loginUser = userService.getLoginUser(request);
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
-        BiVO chart = chartService.getChartByAsync(multipartFile, genChartByAiRequest, loginUser);
+        BiResponse chart = chartService.getChartByAsync(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
     }
 
@@ -306,8 +318,8 @@ public class ChartController {
      * @return
      */
     @PostMapping("/gen/mq")
-    public BaseResponse<BiVO> genChartByAiMq(@RequestPart("file") MultipartFile multipartFile,
-                                                GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+    public BaseResponse<BiResponse> genChartByAiMq(@RequestPart("file") MultipartFile multipartFile,
+                                                   GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
@@ -317,7 +329,7 @@ public class ChartController {
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
         User loginUser = userService.getLoginUser(request);
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
-        BiVO chart = chartService.getChartByMq(multipartFile, genChartByAiRequest, loginUser);
+        BiResponse chart = chartService.getChartByMq(multipartFile, genChartByAiRequest, loginUser);
         return ResultUtils.success(chart);
 
 

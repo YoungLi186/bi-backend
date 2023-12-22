@@ -14,22 +14,19 @@ import com.yl.bi.model.dto.chart.ChartQueryRequest;
 import com.yl.bi.model.dto.chart.GenChartByAiRequest;
 import com.yl.bi.model.entity.Chart;
 import com.yl.bi.model.entity.User;
-import com.yl.bi.model.vo.BiVO;
+import com.yl.bi.common.BiResponse;
+import com.yl.bi.model.vo.ChartVO;
 import com.yl.bi.service.ChartService;
 import com.yl.bi.mapper.ChartMapper;
 import com.yl.bi.utils.ChartDataUtil;
 import com.yl.bi.utils.ExcelUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.rocketmq.client.producer.SendResult;
+import org.springframework.beans.BeanUtils;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import java.sql.Connection;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -59,7 +56,7 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
 //    private Connection connection;
 
     @Override
-    public BiVO getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
+    public BiResponse getChart(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
 
         //拿到文件的大小和原始文件名
         long size = multipartFile.getSize();
@@ -99,11 +96,11 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "保存图表信息失败");
         //将图表元数据保存到单独的一张表
         saveCVSData(cvsData, charId);
-        return new BiVO(charId, genChart, genResult);
+        return new BiResponse(charId, genChart, genResult);
     }
 
     @Override
-    public BiVO getChartByAsync(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
+    public BiResponse getChartByAsync(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
 
         Chart chart = saveChart(multipartFile, genChartByAiRequest, loginUser);
         String goal = chart.getGoal();
@@ -132,18 +129,18 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
             }
         }, threadPoolExecutor);
 
-        BiVO biVO = new BiVO();
-        biVO.setChartId(chart.getId());
-        return biVO;
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(chart.getId());
+        return biResponse;
     }
 
     @Override
-    public BiVO getChartByMq(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
+    public BiResponse getChartByMq(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, User loginUser) {
         Chart chart = saveChart(multipartFile, genChartByAiRequest, loginUser);
         Long id = chart.getId();
         //将待生成的图表ID放入消息队列中
         mqProducerService.sendMsg(id.toString());
-        return new BiVO(id);
+        return new BiResponse(id);
     }
 
 
@@ -292,12 +289,43 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
      * @param chartId 图表编号
      * @return
      */
-    public List<Map<String, Object>> queryChartData(final Long chartId) throws BadSqlGrammarException {
+    public List<Map<String, Object>> queryChartData(final Long chartId) {
         try {
             return chartMapper.queryChartData(chartId);
         } catch (BadSqlGrammarException e) {
             return null;
         }
+    }
+
+
+    /**
+     * 获取图表的封装类
+     * @param chart
+     * @return
+     */
+    @Override
+    public ChartVO getChartVO(Chart chart) {
+        if(chart==null){
+            return null;
+        }
+        ChartVO chartVO = new ChartVO();
+        BeanUtils.copyProperties(chart,chartVO);
+        return  chartVO;
+    }
+
+    @Override
+    public Chart getChartById(Long id) {
+        if(id==null){
+            return null;
+        }
+        Chart chart = getById(id);
+        if(chart==null){
+            return null;
+        }
+        List<Map<String, Object>> maps = queryChartData(id);
+        String chartData = ChartDataUtil.changeDataToCSV(maps);
+        chart.setChartData(chartData);
+        return chart;
     }
 
 
