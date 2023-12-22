@@ -1,5 +1,7 @@
 package com.yl.bi.controller;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
@@ -25,11 +27,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+
+import static com.yl.bi.constant.ChartRedisConstant.CHART_CACHE_ID;
 
 /**
  * 图表接口
@@ -48,6 +53,8 @@ public class ChartController {
     @Resource
     private RedisLimiterManager redisLimiterManager;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     private final static Gson GSON = new Gson();
 
@@ -148,11 +155,20 @@ public class ChartController {
      * @return
      */
     @GetMapping("/get/vo")
-    public BaseResponse<ChartVO> getChartVOById(long id, HttpServletRequest request) {
+    public BaseResponse<ChartVO> getChartVOById(long id, HttpServletRequest request){
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        //拼接chartCacheId
+        String chartCacheId= CHART_CACHE_ID+id;
+        //从redis中获取chartCacheData
+        String chartCacheData = stringRedisTemplate.opsForValue().get(chartCacheId);
+        if(StrUtil.isNotBlank(chartCacheData)){
+            Chart chart = JSONUtil.toBean(chartCacheData, Chart.class);
+            return  ResultUtils.success(chartService.getChartVO(chart));
+        }
         Chart chart = chartService.getChartById(id);
+        chartService.saveChartToRedis(chart);
         ChartVO chartVO = chartService.getChartVO(chart);
         if (chartVO == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);

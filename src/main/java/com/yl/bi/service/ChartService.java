@@ -89,4 +89,17 @@ public interface ChartService extends IService<Chart> {
      * @return
      */
     Chart getChartById(Long id);
+
+
+    /**
+     * 将图表数据放入到缓存中
+     * @param chart
+     */
+    void saveChartToRedis(Chart chart);
+
+    /**
+     * 删除缓存
+     * @param chartId
+     */
+    void deleteChartInRedis(Long chartId);
 }
