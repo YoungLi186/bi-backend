@@ -44,6 +44,13 @@ public interface ChartService extends IService<Chart> {
 
 
     /**
+     *
+     * @param chartId
+     * @return
+     */
+    BiResponse getChartByAsyncRebuild(final Long chartId);
+
+    /**
      *基于消息队列实现异步生成图表
      * @param multipartFile 上传的文件
      * @param genChartByAiRequest 生成图表请求

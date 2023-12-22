@@ -1,6 +1,7 @@
 package com.yl.bi.service.impl;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -132,6 +133,46 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         BiResponse biResponse = new BiResponse();
         biResponse.setChartId(chart.getId());
         return biResponse;
+    }
+
+    @Override
+    public BiResponse getChartByAsyncRebuild(Long chartId) {
+        Chart chart = getById(chartId);
+        if(chart==null){
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR,"图表不存在");
+        }
+        String goal = chart.getGoal();
+        String chartType = chart.getChartType();
+        //分析目标为空
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "分析目标为空");
+        //图标类型
+        ThrowUtils.throwIf(StringUtils.isBlank(chartType), ErrorCode.PARAMS_ERROR, "图表类型不存在");
+        List<Map<String, Object>> maps = queryChartData(chartId);
+        String cvsData = ChartDataUtil.changeDataToCSV(maps);
+        ThrowUtils.throwIf(StringUtils.isBlank(cvsData), ErrorCode.PARAMS_ERROR, "源数据不存在");
+        CompletableFuture.runAsync(() -> {
+            //更新图标生成状态为running
+            Chart updateChart = new Chart();
+            updateChart.setId(chart.getId());
+            updateChart.setStatus("running");
+            boolean b = updateById(updateChart);
+            if (!b) {
+                handleChartUpdateError(chart.getId(), "更新图标状态失败");
+            }
+            // 发送给 AI 分析数据
+            ChartGenResult chartGenResult = ChartDataUtil.getGenResult(aiManager, goal, cvsData, chartType);
+            String genChart = chartGenResult.getGenChart();
+            String genResult = chartGenResult.getGenResult();
+            updateChart.setGenChart(genChart);
+            updateChart.setGenResult(genResult);
+            updateChart.setStatus("succeed");
+            b = updateById(updateChart);
+            if (!b) {
+                handleChartUpdateError(chart.getId(), "更新图标状态失败");
+            }
+        }, threadPoolExecutor);
+
+        return new BiResponse(chartId);
     }
 
     @Override

@@ -324,9 +324,9 @@ public class ChartController {
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
         //分析目标为空
-        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "分析目标为空");
         //图标名称过长不符合规范
-        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图标名称过长");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "图表名称过长");
         User loginUser = userService.getLoginUser(request);
         redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
         BiResponse chart = chartService.getChartByMq(multipartFile, genChartByAiRequest, loginUser);
@@ -335,4 +335,23 @@ public class ChartController {
 
 
     }
+
+    /**
+     * 调用AI分析数据生成图表(异步)
+     */
+    @PostMapping("/gen/async/rebuild")
+    public BaseResponse<BiResponse> genChartByAiAsyncRebuild(Long charId,HttpServletRequest request) {
+
+        //分析目标为空
+        ThrowUtils.throwIf(ObjectUtils.isEmpty(charId), ErrorCode.PARAMS_ERROR, "图表不存在");
+
+        User loginUser = userService.getLoginUser(request);
+        redisLimiterManager.doRateLimit("genChartByAI_"+loginUser.getId());
+        BiResponse chart = chartService.getChartByAsyncRebuild(charId);
+        return ResultUtils.success(chart);
+    }
+
+
+
+
 }
